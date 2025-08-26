@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EEG Temporal Pattern Analyzer</title>
+    <style>
+        body {
+            background: #1a1b26;
+            color: #a9b1d6;
+            font-family: 'Inter', monospace;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #7aa2f7;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #9ece6a;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #41d1a7;
+            color: #1a1b26;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #30a080;
+        }
+
+        button.active {
+            background: #f7768e;
+            color: white;
+        }
+
+        .analysis-panel {
+            background: #24283b;
+            border: 1px solid #414868;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .channel-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        select {
+            background: #1f2335;
+            color: #a9b1d6;
+            border: 1px solid #414868;
+            padding: 5px 10px;
+            border-radius: 3px;
+        }
+
+        .correlation-display {
+            background: #1f2335;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .brain-regions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .waveform-row {
+            display: flex;
+            align-items: center;
+            height: 80px;
+            background: #24283b;
+            border: 1px solid #414868;
+            border-radius: 5px;
+            padding: 8px;
+            position: relative;
+        }
+
+        .electrode-label {
+            width: 60px;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            color: #7aa2f7;
+        }
+
+        .waveform-canvas {
+            flex: 1;
+            height: 60px;
+            background: black;
+            border-radius: 3px;
+            margin: 0 10px;
+        }
+
+        .channel-info {
+            width: 120px;
+            font-size: 11px;
+            color: #9ece6a;
+            text-align: right;
+        }
+
+        .correlation-strength {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 10px;
+            background: rgba(122, 162, 247, 0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: none;
+        }
+
+        .correlation-strength.active {
+            display: block;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: #24283b;
+            border: 1px solid #414868;
+            border-radius: 5px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #7aa2f7;
+        }
+
+        .event-marker {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(247, 118, 142, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .phase-indicator {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: rgba(187, 154, 247, 0.6);
+            display: none;
+        }
+
+        .highlighted-pair {
+            box-shadow: 0 0 8px rgba(158, 206, 106, 0.5);
+            border-color: #9ece6a;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>EEG Temporal Pattern Analyzer</h1>
+        <p class="subtitle">Interactive cross-correlation analysis with direct waveform visualization</p>
+
+        <div class="controls">
+            <button id="playBtn">Play</button>
+            <button id="pauseBtn">Pause</button>
+            <button id="resetBtn">Reset</button>
+            <input type="file" id="eegInput" accept=".csv,.txt,.edf" style="display: none;">
+            <button onclick="document.getElementById('eegInput').click()">Load EEG Data</button>
+            <button id="detectBtn">Detect Events</button>
+            <span id="statusText">Load EEG data to begin analysis</span>
+        </div>
+
+        <div class="analysis-panel" id="analysisPanel">
+            <div style="color: #bb9af7; margin-bottom: 10px; font-weight: bold;">Cross-Correlation Analysis</div>
+            <div class="channel-selector">
+                <label>Channel 1:</label>
+                <select id="channel1Select"></select>
+                <label>Channel 2:</label>
+                <select id="channel2Select"></select>
+                <button id="analyzeBtn">Analyze Pair</button>
+                <button id="clearBtn">Clear</button>
+            </div>
+            <div class="correlation-display" id="correlationDisplay">
+                Select two channels and click Analyze Pair to see cross-correlation results
+            </div>
+        </div>
+
+        <div class="brain-regions" id="channelContainer">
+            <!-- EEG channels will be populated here -->
+        </div>
+
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="channelCount">0</div>
+                <div>Channels</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="currentTime">0.0s</div>
+                <div>Time</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="eventCount">0</div>
+                <div>Events</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="correlationValue">--</div>
+                <div>Correlation (r)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="lagValue">--</div>
+                <div>Lag (ms)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="samplingRate">--</div>
+                <div>Sample Rate</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let eegData = null;
+        let isPlaying = false;
+        let currentTime = 0;
+        let animationId = null;
+        let waveformCanvases = {};
+        let detectedEvents = {};
+        let currentCorrelation = null;
+
+        // Parameters
+        const PARAMS = {
+            windowSize: 4, // seconds of data to display
+            eventThreshold: 3.0, // increased threshold
+            correlationWindow: 512,
+            maxLag: 128, // increased lag range
+            samplingRate: 256
+        };
+
+        window.onload = function () {
+            setupEventListeners();
+        };
+
+        function setupEventListeners() {
+            document.getElementById('playBtn').onclick = play;
+            document.getElementById('pauseBtn').onclick = pause;
+            document.getElementById('resetBtn').onclick = reset;
+            document.getElementById('eegInput').onchange = handleFileLoad;
+            document.getElementById('detectBtn').onclick = detectEvents;
+            document.getElementById('analyzeBtn').onclick = analyzePair;
+            document.getElementById('clearBtn').onclick = clearAnalysis;
+        }
+
+        async function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('statusText').textContent = 'Loading...';
+
+            try {
+                if (file.name.toLowerCase().endsWith('.edf')) {
+                    eegData = await parseEDFFile(file);
+                } else {
+                    const text = await file.text();
+                    eegData = parseCSVFile(text);
+                }
+
+                if (eegData && eegData.channels.length > 0) {
+                    setupChannelDisplay();
+                    populateChannelSelectors();
+                    updateStats();
+                    document.getElementById('statusText').textContent =
+                        `Loaded: ${eegData.channels.length} channels, ${eegData.duration.toFixed(1)}s`;
+                    document.getElementById('analysisPanel').style.display = 'block';
+                } else {
+                    throw new Error('No valid channels found');
+                }
+            } catch (error) {
+                document.getElementById('statusText').textContent = `Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+
+        async function parseEDFFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    try {
+                        const buffer = e.target.result;
+                        const edfData = parseEDFBuffer(buffer);
+                        resolve(edfData);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read EDF file'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function parseEDFBuffer(buffer) {
+            const dataView = new DataView(buffer);
+            let offset = 0;
+
+            // Read basic header info
+            const version = readString(dataView, 0, 8);
+            offset = 256; // Skip to signal count
+
+            const numSignals = parseInt(readString(dataView, 252, 4));
+            const numDataRecords = parseInt(readString(dataView, 236, 8));
+            const recordDuration = parseFloat(readString(dataView, 244, 8));
+
+            // Read signal headers
+            const signals = [];
+            for (let i = 0; i < numSignals; i++) {
+                const label = readString(dataView, 256 + i * 16, 16).trim();
+                const samplesPerRecord = parseInt(readString(dataView, 256 + numSignals * 216 + i * 8, 8));
+                const physicalMin = parseFloat(readString(dataView, 256 + numSignals * 104 + i * 8, 8));
+                const physicalMax = parseFloat(readString(dataView, 256 + numSignals * 112 + i * 8, 8));
+                const digitalMin = parseInt(readString(dataView, 256 + numSignals * 120 + i * 8, 8));
+                const digitalMax = parseInt(readString(dataView, 256 + numSignals * 128 + i * 8, 8));
+
+                signals.push({
+                    label, samplesPerRecord, physicalMin, physicalMax, digitalMin, digitalMax
+                });
+            }
+
+            // Calculate sampling rate
+            const samplingRate = signals[0].samplesPerRecord / recordDuration;
+            PARAMS.samplingRate = samplingRate;
+
+            // Read data
+            const eegSignals = {};
+            const totalSamples = numDataRecords * signals[0].samplesPerRecord;
+
+            signals.forEach(signal => {
+                eegSignals[signal.label] = new Float32Array(totalSamples);
+            });
+
+            const headerLength = 256 + numSignals * 256;
+            let sampleIndex = 0;
+
+            for (let record = 0; record < numDataRecords; record++) {
+                let recordOffset = headerLength;
+
+                // Calculate record start position
+                for (let r = 0; r < record; r++) {
+                    recordOffset += signals.reduce((sum, s) => sum + s.samplesPerRecord * 2, 0);
+                }
+
+                for (let signal of signals) {
+                    const scale = (signal.physicalMax - signal.physicalMin) / (signal.digitalMax - signal.digitalMin);
+
+                    for (let sample = 0; sample < signal.samplesPerRecord; sample++) {
+                        const digitalValue = dataView.getInt16(recordOffset, true);
+                        recordOffset += 2;
+
+                        const physicalValue = (digitalValue - signal.digitalMin) * scale + signal.physicalMin;
+                        eegSignals[signal.label][sampleIndex + sample] = physicalValue;
+                    }
+                }
+                sampleIndex += signals[0].samplesPerRecord;
+            }
+
+            // Filter EEG channels
+            const eegChannels = signals
+                .map(s => s.label)
+                .filter(label => {
+                    const clean = label.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    return clean.match(/^(fp1|fp2|f[3478z]?|c[34z]?|p[3478z]?|o[12]?|t[78]?|fz|cz|pz|eeg|[a-z]+[0-9])/i);
+                });
+
+            return {
+                channels: eegChannels.length > 0 ? eegChannels : signals.map(s => s.label).slice(0, 32),
+                signals: eegSignals,
+                sampleRate: samplingRate,
+                duration: totalSamples / samplingRate,
+                numSamples: totalSamples
+            };
+        }
+
+        function readString(dataView, offset, length) {
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                const byte = dataView.getUint8(offset + i);
+                if (byte === 0) break;
+                result += String.fromCharCode(byte);
+            }
+            return result;
+        }
+
+        function parseCSVFile(text) {
+            const lines = text.trim().split('\n');
+            if (lines.length < 2) return null;
+
+            const headers = lines[0].split(/[,\t]/).map(h => h.trim());
+            const channels = headers.filter(h => h && !h.toLowerCase().match(/^(time|sample|index)$/i));
+
+            const signals = {};
+            channels.forEach(ch => signals[ch] = []);
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(/[,\t]/).map(v => parseFloat(v.trim()));
+                if (values.length >= channels.length) {
+                    channels.forEach((ch, idx) => {
+                        signals[ch].push(isNaN(values[idx]) ? 0 : values[idx]);
+                    });
+                }
+            }
+
+            channels.forEach(ch => {
+                signals[ch] = new Float32Array(signals[ch]);
+            });
+
+            return {
+                channels: channels,
+                signals: signals,
+                sampleRate: PARAMS.samplingRate,
+                duration: signals[channels[0]].length / PARAMS.samplingRate,
+                numSamples: signals[channels[0]].length
+            };
+        }
+
+        function setupChannelDisplay() {
+            const container = document.getElementById('channelContainer');
+            container.innerHTML = '';
+            waveformCanvases = {};
+
+            eegData.channels.forEach(channel => {
+                const row = document.createElement('div');
+                row.className = 'waveform-row';
+                row.id = `row-${channel}`;
+                row.innerHTML = `
+                    <div class="electrode-label">${channel}</div>
+                    <canvas class="waveform-canvas" id="canvas-${channel}"></canvas>
+                    <div class="channel-info" id="info-${channel}">--</div>
+                    <div class="correlation-strength" id="corr-${channel}">r=--</div>
+                    <div class="phase-indicator" id="phase-${channel}"></div>
+                `;
+                container.appendChild(row);
+
+                const canvas = document.getElementById(`canvas-${channel}`);
+                const ctx = canvas.getContext('2d');
+                waveformCanvases[channel] = { canvas, ctx, events: [] };
+
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * window.devicePixelRatio;
+                canvas.height = rect.height * window.devicePixelRatio;
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            });
+        }
+
+        function populateChannelSelectors() {
+            const select1 = document.getElementById('channel1Select');
+            const select2 = document.getElementById('channel2Select');
+
+            select1.innerHTML = '<option value="">Select Channel 1</option>';
+            select2.innerHTML = '<option value="">Select Channel 2</option>';
+
+            eegData.channels.forEach(ch => {
+                select1.innerHTML += `<option value="${ch}">${ch}</option>`;
+                select2.innerHTML += `<option value="${ch}">${ch}</option>`;
+            });
+        }
+
+        function detectEvents() {
+            if (!eegData) return;
+
+            document.getElementById('statusText').textContent = 'Detecting events...';
+            detectedEvents = {};
+
+            eegData.channels.forEach(channel => {
+                detectedEvents[channel] = [];
+                const signal = eegData.signals[channel];
+                const windowSize = Math.floor(PARAMS.samplingRate * 0.1);
+
+                for (let i = windowSize; i < signal.length - windowSize; i++) {
+                    const window = signal.slice(i - windowSize, i + windowSize);
+                    const mean = window.reduce((a, b) => a + b) / window.length;
+                    const std = Math.sqrt(window.reduce((sum, val) => sum + (val - mean) ** 2, 0) / window.length);
+
+                    const zScore = Math.abs((signal[i] - mean) / std);
+                    if (zScore > PARAMS.eventThreshold) {
+                        // Check local maximum
+                        let isMax = true;
+                        for (let j = i - 5; j <= i + 5; j++) {
+                            if (j >= 0 && j < signal.length && Math.abs(signal[j]) > Math.abs(signal[i])) {
+                                isMax = false;
+                                break;
+                            }
+                        }
+
+                        if (isMax) {
+                            detectedEvents[channel].push({
+                                sample: i,
+                                time: i / eegData.sampleRate,
+                                amplitude: signal[i],
+                                zScore: zScore
+                            });
+                            i += 10; // Skip ahead
+                        }
+                    }
+                }
+            });
+
+            const totalEvents = Object.values(detectedEvents).reduce((sum, events) => sum + events.length, 0);
+            document.getElementById('statusText').textContent = `Detected ${totalEvents} events`;
+            updateStats();
+        }
+
+        // --- drop-in replacement ---
+        function analyzePair() {
+            const ch1 = document.getElementById('channel1Select').value;
+            const ch2 = document.getElementById('channel2Select').value;
+
+            if (!ch1 || !ch2 || ch1 === ch2) {
+                alert('Please select two different channels');
+                return;
+            }
+
+            // clear previous highlighting/indicators
+            clearAnalysis();
+
+            // highlight chosen pair
+            document.getElementById(`row-${ch1}`).classList.add('highlighted-pair');
+            document.getElementById(`row-${ch2}`).classList.add('highlighted-pair');
+
+            // signals
+            const sig1 = eegData.signals[ch1];
+            const sig2 = eegData.signals[ch2];
+
+            // compute correlation over the whole file (your global scan)
+            const result = computeCrossCorrelation(sig1, sig2);
+
+            // build human-readable direction using the *selected* channels
+            const direction =
+                result.bestLag > 0 ? `${ch1} leads ${ch2}` :
+                    result.bestLag < 0 ? `${ch2} leads ${ch1}` :
+                        'synchronous';
+
+            // store for live updates during playback
+            currentCorrelation = {
+                channel1: ch1,
+                channel2: ch2,
+                ...result,
+                direction
+            };
+
+            // show r on each channel row
+            const rTxt = `r=${result.maxCorr.toFixed(3)}`;
+            const c1 = document.getElementById(`corr-${ch1}`);
+            const c2 = document.getElementById(`corr-${ch2}`);
+            if (c1) { c1.textContent = rTxt; c1.classList.add('active'); }
+            if (c2) { c2.textContent = rTxt; c2.classList.add('active'); }
+
+            // top-panel details (includes robust median lag if your computeCrossCorrelation returns it)
+            const display = document.getElementById('correlationDisplay');
+            if (display) {
+                const hasMedian = typeof result.medianLag !== 'undefined';
+                display.innerHTML = `
+        <strong>${ch1} ↔ ${ch2}</strong><br>
+        Max Correlation (anywhere): <span style="color:#9ece6a">${result.maxCorr.toFixed(4)}</span><br>
+        Best Lag (anywhere): <span style="color:#7aa2f7">${result.bestLag}</span> samples
+        (${result.lagTime.toFixed(1)}ms) — <span style="color:#bb9af7">${direction}</span><br>
+        ${hasMedian ? `Median Lag (robust): <span style="color:#bb9af7">${result.medianLag}</span> samples
+        (${result.medianLagMs.toFixed(1)}ms)<br>` : ``}
+        Significance: ${Math.abs(result.maxCorr) > 0.3
+                        ? '<span style="color:#9ece6a">Significant</span>'
+                        : '<span style="color:#f7768e">Weak</span>'}
+        `;
+            }
+
+            updateStats();
+        }
+
+        function computeCrossCorrelation(sig1, sig2) {
+            const n = Math.min(sig1.length, sig2.length);
+            const windowSize = PARAMS.correlationWindow;
+            const step = Math.floor(windowSize / 4);
+
+            let bestCorr = 0;
+            let bestLag = 0;
+            let correlationCount = 0;
+
+            // Sliding window correlation
+            for (let start = 0; start < n - windowSize; start += step) {
+                const win1 = sig1.slice(start, start + windowSize);
+                const win2 = sig2.slice(start, start + windowSize);
+
+                // Compute correlation at different lags
+                for (let lag = -PARAMS.maxLag; lag <= PARAMS.maxLag; lag++) {
+                    let sum = 0, count = 0;
+                    const mean1 = win1.reduce((a, b) => a + b) / win1.length;
+                    const mean2 = win2.reduce((a, b) => a + b) / win2.length;
+
+                    let sumSq1 = 0, sumSq2 = 0;
+
+                    for (let i = 0; i < windowSize; i++) {
+                        const j = i + lag;
+                        if (j >= 0 && j < windowSize) {
+                            const dev1 = win1[i] - mean1;
+                            const dev2 = win2[j] - mean2;
+                            sum += dev1 * dev2;
+                            sumSq1 += dev1 * dev1;
+                            sumSq2 += dev2 * dev2;
+                            count++;
+                        }
+                    }
+
+                    if (count > windowSize * 0.8 && sumSq1 > 0 && sumSq2 > 0) {
+                        const corr = sum / Math.sqrt(sumSq1 * sumSq2);
+                        if (Math.abs(corr) > Math.abs(bestCorr)) {
+                            bestCorr = corr;
+                            bestLag = lag;
+                        }
+                    }
+                }
+                correlationCount++;
+            }
+
+            return {
+                maxCorr: bestCorr,
+                bestLag: bestLag,
+                lagTime: (bestLag / eegData.sampleRate) * 1000,
+                direction: bestLag > 0 ? `${arguments[0]} leads` : bestLag < 0 ? `leads ${arguments[0]}` : 'synchronous',
+                windowsAnalyzed: correlationCount
+            };
+        }
+
+        function clearAnalysis() {
+            // Remove highlights
+            document.querySelectorAll('.highlighted-pair').forEach(el => {
+                el.classList.remove('highlighted-pair');
+            });
+
+            // Hide correlation indicators
+            document.querySelectorAll('.correlation-strength').forEach(el => {
+                el.classList.remove('active');
+                el.textContent = 'r=--';
+            });
+
+            currentCorrelation = null;
+            document.getElementById('correlationDisplay').innerHTML = 'Select two channels and click Analyze Pair';
+            updateStats();
+        }
+
+        function updateWaveforms() {
+            if (!eegData) return;
+
+            const startTime = Math.max(0, currentTime - PARAMS.windowSize);
+            const endTime = Math.min(eegData.duration, currentTime);
+
+            eegData.channels.forEach(channel => {
+                const { canvas, ctx } = waveformCanvases[channel];
+                const signal = eegData.signals[channel];
+
+                const startSample = Math.floor(startTime * eegData.sampleRate);
+                const endSample = Math.floor(endTime * eegData.sampleRate);
+                const numSamples = endSample - startSample;
+
+                if (numSamples <= 0) return;
+
+                ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+                // Auto-scale
+                let maxAmp = 0;
+                for (let i = startSample; i < endSample; i++) {
+                    maxAmp = Math.max(maxAmp, Math.abs(signal[i]));
+                }
+                const scale = maxAmp > 0 ? (canvas.clientHeight / 2 - 5) / maxAmp : 1;
+
+                // Draw waveform
+                ctx.strokeStyle = '#9ece6a';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+
+                for (let i = 0; i < numSamples; i++) {
+                    const x = (i / numSamples) * canvas.clientWidth;
+                    const y = canvas.clientHeight / 2 - signal[startSample + i] * scale;
+
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                // Draw events as semi-transparent dots on the waveform
+                if (detectedEvents[channel]) {
+                    ctx.fillStyle = 'rgba(247, 118, 142, 0.8)';
+                    detectedEvents[channel].forEach(event => {
+                        if (event.time >= startTime && event.time <= endTime) {
+                            const x = ((event.time - startTime) / PARAMS.windowSize) * canvas.clientWidth;
+                            const y = canvas.clientHeight / 2 - event.amplitude * scale;
+                            ctx.beginPath();
+                            ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                            ctx.fill();
+                        }
+                    });
+                }
+
+                // Current time line
+                const currentX = ((currentTime - startTime) / PARAMS.windowSize) * canvas.clientWidth;
+                ctx.strokeStyle = '#f7768e';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(currentX, 0);
+                ctx.lineTo(currentX, canvas.clientHeight);
+                ctx.stroke();
+
+                // Show phase relationship for analyzed pair
+                if (currentCorrelation &&
+                    (channel === currentCorrelation.channel1 || channel === currentCorrelation.channel2)) {
+
+                    const phaseOffset = currentCorrelation.bestLag / eegData.sampleRate;
+                    let phaseX = currentX;
+
+                    if (channel === currentCorrelation.channel2) {
+                        phaseX = currentX + (phaseOffset / PARAMS.windowSize) * canvas.clientWidth;
+                    }
+
+                    if (phaseX >= 0 && phaseX <= canvas.clientWidth) {
+                        ctx.strokeStyle = 'rgba(187, 154, 247, 0.8)';
+                        ctx.lineWidth = 1;
+                        ctx.setLineDash([5, 5]);
+                        ctx.beginPath();
+                        ctx.moveTo(phaseX, 0);
+                        ctx.lineTo(phaseX, canvas.clientHeight);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                }
+            });
+        }
+
+        function updateStats() {
+            document.getElementById('channelCount').textContent = eegData ? eegData.channels.length : 0;
+            document.getElementById('currentTime').textContent = `${currentTime.toFixed(1)}s`;
+            document.getElementById('samplingRate').textContent = eegData ? `${eegData.sampleRate}Hz` : '--';
+
+            const totalEvents = eegData && detectedEvents ?
+                Object.values(detectedEvents).reduce((sum, events) => sum + events.length, 0) : 0;
+            document.getElementById('eventCount').textContent = totalEvents;
+
+            if (currentCorrelation) {
+                document.getElementById('correlationValue').textContent = currentCorrelation.maxCorr.toFixed(3);
+                document.getElementById('lagValue').textContent = `${currentCorrelation.lagTime.toFixed(1)}ms`;
+            } else {
+                document.getElementById('correlationValue').textContent = '--';
+                document.getElementById('lagValue').textContent = '--';
+            }
+        }
+
+        function play() {
+            if (!eegData) return;
+            isPlaying = true;
+            document.getElementById('playBtn').classList.add('active');
+            animate();
+        }
+
+        function pause() {
+            isPlaying = false;
+            document.getElementById('playBtn').classList.remove('active');
+            if (animationId) cancelAnimationFrame(animationId);
+        }
+
+        function reset() {
+            currentTime = 0;
+            pause();
+        }
+
+        function animate() {
+            if (!isPlaying || !eegData) return;
+
+            // advance time (30 FPS)
+            currentTime += 1 / 30;
+            if (currentTime >= eegData.duration) currentTime = PARAMS.windowSize;
+
+            // live correlation for the selected pair (sliding window around currentTime)
+            if (currentCorrelation && eegData) {
+                const ch1 = currentCorrelation.channel1;
+                const ch2 = currentCorrelation.channel2;
+                if (ch1 && ch2 && ch1 !== ch2) {
+                    const s1 = eegData.signals[ch1];
+                    const s2 = eegData.signals[ch2];
+                    const halfWin = Math.floor(PARAMS.correlationWindow / 2);
+                    const center = Math.floor(currentTime * eegData.sampleRate);
+                    const start = Math.max(0, center - halfWin);
+                    const end = Math.min(s1.length, center + halfWin);
+
+                    if (end - start > 10) {
+                        const win1 = s1.slice(start, end);
+                        const win2 = s2.slice(start, end);
+                        const res = localLagCorr(win1, win2, PARAMS.maxLag);
+
+                        currentCorrelation.maxCorr = res.maxCorr;
+                        currentCorrelation.bestLag = res.bestLag;
+                        currentCorrelation.lagTime = (res.bestLag / eegData.sampleRate) * 1000;
+
+                        // update small stat tiles
+                        const corrEl = document.getElementById('correlationValue');
+                        const lagEl = document.getElementById('lagValue');
+                        if (corrEl) corrEl.textContent = res.maxCorr.toFixed(3);
+                        if (lagEl) lagEl.textContent = `${currentCorrelation.lagTime.toFixed(1)}ms`;
+                    }
+                }
+            }
+
+            updateWaveforms();
+            updateStats();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // local lagged correlation in a window
+        function localLagCorr(win1, win2, maxLag) {
+            const n = Math.min(win1.length, win2.length);
+            const m1 = mean(win1), m2 = mean(win2);
+            const s1 = stddev(win1, m1), s2 = stddev(win2, m2);
+
+            let best = 0, bestLag = 0;
+            for (let lag = -maxLag; lag <= maxLag; lag++) {
+                let sum = 0, cnt = 0;
+                for (let i = 0; i < n; i++) {
+                    const j = i + lag;
+                    if (j >= 0 && j < n) {
+                        const a = (win1[i] - m1) / (s1 || 1e-9);
+                        const b = (win2[j] - m2) / (s2 || 1e-9);
+                        sum += a * b; cnt++;
+                    }
+                }
+                if (cnt > 0) {
+                    const r = sum / cnt;
+                    if (Math.abs(r) > Math.abs(best)) { best = r; bestLag = lag; }
+                }
+            }
+            return { maxCorr: best, bestLag };
+        }
+
+        function mean(arr) {
+            let s = 0;
+            for (let i = 0; i < arr.length; i++) s += arr[i];
+            return s / arr.length;
+        }
+
+        function stddev(arr, m) {
+            let s = 0;
+            for (let i = 0; i < arr.length; i++) { const d = arr[i] - m; s += d * d; }
+            return Math.sqrt(s / arr.length) || 0;
+        }
+
+            // keep canvases crisp on resize
+            window.addEventListener('resize', () => {
+                Object.values(waveformCanvases).forEach(({ canvas, ctx }) => {
+                    const rect = canvas.getBoundingClientRect();
+                    canvas.width = rect.width * window.devicePixelRatio;
+                    canvas.height = rect.height * window.devicePixelRatio;
+                    ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+                });
+                // redraw after resize
+                updateWaveforms();
+                updateStats();
+            });
+
+        // --- helpers to make it feel good ---
+
+        // pick channels by clicking rows: first click -> ch1, second click -> ch2 -> analyze
+        function attachRowClickSelection() {
+            const container = document.getElementById('channelContainer');
+            container.addEventListener('click', (e) => {
+                const row = e.target.closest('.waveform-row');
+                if (!row) return;
+                const ch = row.id.replace('row-', '');
+
+                const sel1 = document.getElementById('channel1Select');
+                const sel2 = document.getElementById('channel2Select');
+
+                // simple toggle picker
+                if (!sel1.value || sel1.value === ch) {
+                    sel1.value = ch;
+                    // visual nudge
+                    clearAnalysis();
+                    document.getElementById(`row-${ch}`).classList.add('highlighted-pair');
+                } else {
+                    sel2.value = ch;
+                    analyzePair();
+                }
+            });
+        }
+
+        // space = play/pause, arrows = scrub
+        function initKeyboardShortcuts() {
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    isPlaying ? pause() : play();
+                } else if (e.code === 'ArrowRight') {
+                    if (!eegData) return;
+                    currentTime = Math.min(eegData.duration, currentTime + 0.25);
+                    updateWaveforms(); updateStats();
+                } else if (e.code === 'ArrowLeft') {
+                    if (!eegData) return;
+                    currentTime = Math.max(0, currentTime - 0.25);
+                    updateWaveforms(); updateStats();
+                }
+            });
+        }
+
+        // fix: compute "direction" text based on the selected channels
+        (function patchAnalyzePairDirection() {
+            const origAnalyze = analyzePair;
+            analyzePair = function () {
+                const ch1 = document.getElementById('channel1Select').value;
+                const ch2 = document.getElementById('channel2Select').value;
+                origAnalyze(); // runs compute + UI updates
+
+                if (currentCorrelation && ch1 && ch2 && ch1 !== ch2) {
+                    const direction =
+                        currentCorrelation.bestLag > 0 ? `${ch1} leads` :
+                            currentCorrelation.bestLag < 0 ? `${ch2} leads` : 'synchronous';
+
+                    currentCorrelation.direction = direction;
+
+                    // update the display block with corrected direction
+                    const display = document.getElementById('correlationDisplay');
+                    if (display) {
+                        display.innerHTML = `
+                        <strong>${ch1} ↔ ${ch2}</strong><br>
+                        Max Correlation: <span style="color:#9ece6a">${currentCorrelation.maxCorr.toFixed(4)}</span><br>
+                        Optimal Lag: <span style="color:#7aa2f7">${currentCorrelation.bestLag}</span> samples (${currentCorrelation.lagTime.toFixed(1)}ms)<br>
+                        Direction: <span style="color:#bb9af7">${direction}</span><br>
+                        Significance: ${Math.abs(currentCorrelation.maxCorr) > 0.3
+                                ? '<span style="color:#9ece6a">Significant</span>'
+                                : '<span style="color:#f7768e">Weak</span>'}
+                    `;
+                    }
+                }
+            };
+        })();
+
+        // hi-DPI sizing on first frame too
+        window.addEventListener('load', () => {
+            initKeyboardShortcuts();
+            attachRowClickSelection();
+
+            // ensure canvases match CSS size at startup
+            Object.values(waveformCanvases).forEach(({ canvas, ctx }) => {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * window.devicePixelRatio;
+                canvas.height = rect.height * window.devicePixelRatio;
+                ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+            });
+            updateWaveforms();
+            updateStats();
+        });
+    </script>
+</body>
+
+</html>
