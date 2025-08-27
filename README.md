@@ -60,7 +60,7 @@ For a super smooth, high-resolution visualization on a powerful machine:
 
 This command sets the playback to 120 FPS and increases the interpolation grid to 512x512 pixels.
 
-python eeg_wavefield_viewer_ui2.py -f 1.edf --fps 120 --grid 512
+python eeg_wavefield_viewer_ui2.py -f your.edf --fps 120 --grid 512
 
 To analyze the Theta band (4-8 Hz) and apply a Laplacian filter for cleaner, more localized activity:
 
