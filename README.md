@@ -2,6 +2,8 @@
 
 EDIT: ADDED the EEG Wavefield Viewer 3 that has third mode. Power. So when you select the band 
 it just shows the combined power on those two frequencies on top of the interpolation and phase. 
+You can get to it like to others with m button. 
+
 
 ![Pic1](pic1.png)
 
