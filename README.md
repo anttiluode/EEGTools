@@ -1,5 +1,8 @@
 # EEG Visualization Fun Zone 🧠✨
 
+EDIT: ADDED the EEG Wavefield Viewer 3 that has third mode. Power. So when you select the band 
+it just shows the combined power on those two frequencies on top of the interpolation and phase. 
+
 ![Pic1](pic1.png)
 
 ![Pic2](pic2.png)
