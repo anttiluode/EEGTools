@@ -1,5 +1,8 @@
 # EEG Visualization Fun Zone 🧠✨
 
+EDIT: ADDED The 3D EEG Wavefield V4 system. Nothing 3d about it yet, but it has sliders for the 
+celluar interference patterns. 
+
 EDIT: ADDED the EEG Wavefield Viewer 3 that has third mode. Power. So when you select the band 
 it just shows the combined power on those two frequencies on top of the interpolation and phase. 
 You can get to it like to others with m button. 
