@@ -1,7 +1,7 @@
 # EEG Visualization Fun Zone 🧠✨
 
-EDIT: Removed the Cuda 3. All the overlay was the old overlay system turning on with a+b 
-and deltak - lambada. Ah. 
+EDIT: Added back Cuda3.py it shows weird things when the a+b fields and deltak - lambada 
+are on. 
 
 EDIT: ADDED The 3D EEG Wavefield V4 system. Nothing 3d about it yet, but it has sliders for the 
 celluar interference patterns. 
