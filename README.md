@@ -1,5 +1,9 @@
 # EEG Visualization Fun Zone 🧠✨
 
+EDIT: Added cuda3.py it is a bit diferent. I showed it on the youtube video: 
+
+https://www.youtube.com/watch?v=yfEQY7PkIE8
+
 EDIT: ADDED The 3D EEG Wavefield V4 system. Nothing 3d about it yet, but it has sliders for the 
 celluar interference patterns. 
 
