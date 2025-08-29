@@ -1,5 +1,8 @@
 # EEG Visualization Fun Zone 🧠✨
 
+EDIT: Added the cuda3 that has G button which shows the grid that creates the visualization. 
+So either Delaunay triangular lattice or voronoi cells. 
+
 EDIT: Added back Cuda3.py it shows weird things when the a+b fields and deltak - lambada 
 are on. EDIT: The weird things.. At low frequencies is Delaunay triangular lattice. 
 
