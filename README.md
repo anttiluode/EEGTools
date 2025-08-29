@@ -1,7 +1,7 @@
 # EEG Visualization Fun Zone 🧠✨
 
 EDIT: Added back Cuda3.py it shows weird things when the a+b fields and deltak - lambada 
-are on. 
+are on. EDIT: The weird things.. At low frequencies is Delaunay triangular lattice. 
 
 EDIT: ADDED The 3D EEG Wavefield V4 system. Nothing 3d about it yet, but it has sliders for the 
 celluar interference patterns. 
