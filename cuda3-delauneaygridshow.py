@@ -421,16 +421,47 @@ class WavefieldViewer:
         # re-draw figure
         self.fig.canvas.draw_idle()
 
-    def _toggle_grid(self, _):
-        self.grid_on = not self.grid_on
-        self.btn_grid.label.set_text("Grid ✓" if self.grid_on else "Grid")
-        if self.grid_on:
+    def _draw_voronoi_overlay(self):
+        from scipy.spatial import Voronoi
+        # remove old lines
+        for ln in self.grid_lines:
+            ln.remove()
+        self.grid_lines.clear()
+
+        pts = np.array([COORDS[n] for n in self.ch], dtype=float)
+        if len(pts) < 3:
+            return
+
+        try:
+            vor = Voronoi(pts)
+            # Draw Voronoi cell edges
+            for pointidx, simplex in zip(vor.ridge_points, vor.ridge_vertices):
+                simplex = np.asarray(simplex)
+                if np.all(simplex >= 0):  # finite ridge
+                    ln, = self.ax.plot(vor.vertices[simplex, 0], vor.vertices[simplex, 1], 
+                                     lw=0.8, color='orange', alpha=0.6, zorder=4)
+                    self.grid_lines.append(ln)
+        except Exception:
+            # Fallback to Delaunay if Voronoi fails
             self._draw_grid_overlay()
-        else:
+            return
+
+        self.fig.canvas.draw_idle()
+
+    def _toggle_grid(self, _):
+        self.grid_on = (self.grid_on + 1) % 3  # 0=off, 1=delaunay, 2=voronoi
+        if self.grid_on == 0:
+            self.btn_grid.label.set_text("Grid")
             for ln in self.grid_lines:
                 ln.remove()
             self.grid_lines.clear()
-            self.fig.canvas.draw_idle()
+        elif self.grid_on == 1:
+            self.btn_grid.label.set_text("Delaunay")
+            self._draw_grid_overlay()
+        else:  # self.grid_on == 2
+            self.btn_grid.label.set_text("Voronoi")
+            self._draw_voronoi_overlay()
+        self.fig.canvas.draw_idle()
 
     # --- UI ---
     def _build_figure(self, dpi):
@@ -475,7 +506,6 @@ class WavefieldViewer:
         self.s_time.on_changed(self._on_slider)
         self.btn_play = Button(self.fig.add_axes([0.72, 0.026, 0.05, 0.037]), "Play")
         self.btn_play.on_clicked(lambda _ : self.toggle_play())
-        
         Button(self.fig.add_axes([0.64, 0.026, 0.04, 0.037]), "« 5s").on_clicked(lambda _ : self.seek_seconds(-5))
         Button(self.fig.add_axes([0.68, 0.026, 0.04, 0.037]), "« 1s").on_clicked(lambda _ : self.seek_seconds(-1))
         Button(self.fig.add_axes([0.77, 0.026, 0.04, 0.037]), "1s »").on_clicked(lambda _ : self.seek_seconds(+1))
@@ -488,12 +518,14 @@ class WavefieldViewer:
 
     # --- overlay helpers ---
     def _compute_phase_grid(self, phases_t):
+        # go via cos/sin + arctan2 to avoid branch cuts
         pts = [COORDS[n] for n in self.ch]
         R = griddata(pts, np.cos(phases_t), (self.Xg, self.Yg), method='cubic')
         I = griddata(pts, np.sin(phases_t), (self.Xg, self.Yg), method='cubic')
         return np.arctan2(I, R)
 
     def _local_lambda_from_phase(self, phiA, phiB):
+        # λ_local = 2π / |∇φ_A - ∇φ_B|
         if CUPY_AVAILABLE:
             PhiA = cp.asarray(phiA); PhiB = cp.asarray(phiB)
             gyA, gxA = cp.gradient(PhiA); gyB, gxB = cp.gradient(PhiB)
@@ -504,6 +536,7 @@ class WavefieldViewer:
             dkg = np.hypot((gxA-gxB), (gyA-gyB)) + 1e-9
             lam = (2.0*np.pi) / dkg
         lam = np.where(self.mask, lam, np.nan)
+        # robust normalize for coloring (large λ = coarse; small λ = fine)
         finite = np.isfinite(lam)
         if not np.any(finite): return lam, (0,1)
         p2, p98 = np.nanpercentile(lam[finite], [2, 98])
@@ -621,6 +654,7 @@ class WavefieldViewer:
     def _launch_moire(self, _=None):
         fstart = min(self.s_Alo.val, self.s_Blo.val)
         fend   = max(self.s_Ahi.val, self.s_Bhi.val)
+        # keep 3D light: 256 or your main grid, whichever is smaller
         stack_grid = int(min(256, self.grid_n))
         self._moire.run(
             labels=self.ch, data=self.X_raw.T, fs=self.fs,
